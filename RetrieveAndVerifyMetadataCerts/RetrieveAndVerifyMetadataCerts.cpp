@@ -127,8 +127,8 @@ std::string FormatBuffer(const char *prefix, const uint8_t (&bufferToPrint)[size
 
 int main()
 {
-    std::cout << "Hello World!\n";
 
+    std::cout << "Retrieve Metadata Signing Certificates from MAA" << std::endl;
     std::unique_ptr<X509Cert> cert;
     std::vector<uint8_t> quoteExtension;
     {
@@ -150,7 +150,7 @@ int main()
                     auto base64Cert = key["x5c"].array_items()[0];
 
                     cert = X509Cert::Deserialize(base64Cert.string_value());
-                    auto quoteExtension = cert->FindExtension(SgxExtensionOidX);
+                    quoteExtension = cert->FindExtension(SgxExtensionOidX);
                     if (!quoteExtension.empty())
                     {
                         break;
@@ -166,48 +166,35 @@ int main()
         exit(1);
     }
 
+    std::cout << "Found a certificate which contains an embedded SGX Quote " << std::endl;
+
     oe_report_t parsedReport = { 0 };
     std::vector<uint8_t> oe_quote;
     {
-        auto quoteExtension = cert->FindExtension(SgxExtensionOidX);
-        if (!quoteExtension.empty())
+        auto quote = cert->ExtractOctetString(quoteExtension);
         {
-            auto quote = cert->ExtractOctetString(quoteExtension);
+            // The quote embedded in the extension is an SGX quote. The oe_verify_remote_report API requires an OE remote quote, so
+            // transform the SGX quote into an OE quote.
+            oe_report_header header;
+
+            header.version = 1;
+            header.report_size = quote.size();
+            header.report_type = oe_report_type::OE_REPORT_TYPE_SGX_REMOTE;
+            auto headerVector(std::vector<uint8_t>(reinterpret_cast<uint8_t*>(&header), reinterpret_cast<uint8_t*>(&header + 1)));
+            oe_quote.insert(oe_quote.end(), headerVector.begin(), headerVector.end());
+            oe_quote.insert(oe_quote.end(), quote.begin(), quote.end());
+
+            auto rv = oe_verify_remote_report(oe_quote.data(), oe_quote.size(), nullptr, 0, &parsedReport);
+
+            if (rv != OE_OK)
             {
-                // The quote embedded in the extension is an SGX quote. The oe_verify_remote_report API requires an OE remote quote, so
-                // transform the SGX quote into an OE quote.
-                oe_report_header header;
-
-                header.version = 1;
-                header.report_size = quote.size();
-                header.report_type = oe_report_type::OE_REPORT_TYPE_SGX_REMOTE;
-                auto headerVector(std::vector<uint8_t>(reinterpret_cast<uint8_t*>(&header), reinterpret_cast<uint8_t*>(&header + 1)));
-                oe_quote.insert(oe_quote.end(), headerVector.begin(), headerVector.end());
-                oe_quote.insert(oe_quote.end(), quote.begin(), quote.end());
-
-                auto rv = oe_verify_remote_report(oe_quote.data(), oe_quote.size(), nullptr, 0, &parsedReport);
-
-                if (rv != OE_OK)
-                {
-                    std::cout << "Unable to verify quote: " << oe_result_str(rv) << std::endl;
-                }
-
-#if 0
-                rv = oe_get_evidence()
-                oe_policy_t policies;
-                oe_claim_t* claims;
-                size_t claimsLength;
-                rv = oe_verify_evidence(oe_quote.data(), oe_quote.size(), nullptr, 0, &policies, sizeof(policies), &claims, &claimsLength);
-                if (rv != OE_OK)
-                {
-                    std::cout << "Unable to verify quote: " << oe_result_str(rv) << std::endl;
-                }
-
-                oe_free_claims_list(claims, claimsLength);
-#endif
+                std::cout << "Unable to verify quote: " << oe_result_str(rv) << std::endl;
+                exit(2);
             }
         }
     }
+
+    std::cout << "SGX Quote has been successfully verified." << std::endl;
 
     std::cout << "Parsed SGX Report: " << std::endl;
     std::cout << " Security Version: " << parsedReport.identity.security_version << std::endl;
@@ -217,8 +204,10 @@ int main()
 
     std::cout << FormatBuffer("       report data: ", std::vector<uint8_t>(parsedReport.report_data, parsedReport.report_data + parsedReport.report_data_size));
 
+
     std::string enclaveHeldData = cert->ExportPublicKeyAsPEM();
 
+    // The MAA generates the hash over the PEM encoded public key, including the trailing null terminator.
     auto ehd(std::vector<uint8_t>(enclaveHeldData.begin(), enclaveHeldData.end()));
     ehd.push_back(0);
 
