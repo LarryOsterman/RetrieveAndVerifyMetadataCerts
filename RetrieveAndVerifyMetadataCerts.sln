@@ -7,6 +7,8 @@ Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "RetrieveAndVerifyMetadataCe
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "GenerateSGXPemKey", "GenerateSGXPemKey\GenerateSGXPemKey.vcxproj", "{0FA352E2-FF80-4A52-844C-0235C15FF13E}"
 EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "VerifyMetadataCertificates", "VerifyMetadataCertificates\VerifyMetadataCertificates.vcxproj", "{07141FC4-2DC9-4E23-9D55-D93E7D3EBAE7}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|x64 = Debug|x64
@@ -31,6 +33,14 @@ Global
 		{0FA352E2-FF80-4A52-844C-0235C15FF13E}.Release|x64.Build.0 = Release|x64
 		{0FA352E2-FF80-4A52-844C-0235C15FF13E}.Release|x86.ActiveCfg = Release|Win32
 		{0FA352E2-FF80-4A52-844C-0235C15FF13E}.Release|x86.Build.0 = Release|Win32
+		{07141FC4-2DC9-4E23-9D55-D93E7D3EBAE7}.Debug|x64.ActiveCfg = Debug|x64
+		{07141FC4-2DC9-4E23-9D55-D93E7D3EBAE7}.Debug|x64.Build.0 = Debug|x64
+		{07141FC4-2DC9-4E23-9D55-D93E7D3EBAE7}.Debug|x86.ActiveCfg = Debug|Win32
+		{07141FC4-2DC9-4E23-9D55-D93E7D3EBAE7}.Debug|x86.Build.0 = Debug|Win32
+		{07141FC4-2DC9-4E23-9D55-D93E7D3EBAE7}.Release|x64.ActiveCfg = Release|x64
+		{07141FC4-2DC9-4E23-9D55-D93E7D3EBAE7}.Release|x64.Build.0 = Release|x64
+		{07141FC4-2DC9-4E23-9D55-D93E7D3EBAE7}.Release|x86.ActiveCfg = Release|Win32
+		{07141FC4-2DC9-4E23-9D55-D93E7D3EBAE7}.Release|x86.Build.0 = Release|Win32
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

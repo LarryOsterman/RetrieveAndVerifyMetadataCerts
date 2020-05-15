@@ -1,5 +1,6 @@
 #pragma once
 #include <windows.h>
+#include <wincrypt.h>
 #pragma warning(push)
 #pragma warning(disable: 6319)
 #include <wil\resource.h>
