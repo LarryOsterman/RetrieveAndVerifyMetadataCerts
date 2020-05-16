@@ -172,6 +172,11 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <Content Include="$(SolutionDir)\packages\Microsoft.Azure.DCAP.1.4.2\build\native\dcap_quoteprov.dll">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+  </ItemGroup>
+  <ItemGroup>
     <None Include="cpp.hint" />
     <None Include="packages.config" />
   </ItemGroup>

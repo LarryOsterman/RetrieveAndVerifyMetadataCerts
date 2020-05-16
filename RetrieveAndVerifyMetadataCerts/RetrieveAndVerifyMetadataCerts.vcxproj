@@ -170,11 +170,6 @@
     <ClInclude Include="curl.h" />
     <ClInclude Include="plugin.h" />
   </ItemGroup>
-  <ItemGroup>
-    <Content Include="$(SolutionDir)\packages\Microsoft.Azure.DCAP.1.4.2\build\native\dcap_quoteprov.dll">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </Content>
-  </ItemGroup>
   <Import Project="$(SolutionDir)\packages\json11.1.0.1\build\json11.props" />
   <ItemGroup>
     <None Include="packages.config" />

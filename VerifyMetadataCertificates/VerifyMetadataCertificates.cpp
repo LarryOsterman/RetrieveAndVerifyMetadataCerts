@@ -18,8 +18,6 @@
 
 const char* SgxExtensionOidX = "1.2.840.113556.10.1.1";
 
-// This is an example of an exported variable
-VERIFYMETADATACERTIFICATES_API int nVerifyMetadataCertificates=0;
 // This class is exported from the dll
 class CVerifyMetadataCertificates : public IVerifyMetadataCertificates
 {
@@ -29,7 +27,13 @@ public:
     // Inherited via IUnknown
     virtual HRESULT __stdcall QueryInterface(REFIID riid, void** ppvObject) override
     {
-        if (riid == __uuidof(IVerifyMetadataCertificates))
+        if (riid == __uuidof(IUnknown))
+        {
+            AddRef();
+            *ppvObject = this;
+            return S_OK;
+        }
+        else if (riid == __uuidof(IVerifyMetadataCertificates))
         {
             AddRef();
             *ppvObject = this;
@@ -54,40 +58,126 @@ public:
     }
 
 private:
-    unsigned long _refCount{ 1 };
-    std::unique_ptr<X509Cert> _workingCert;
-    std::vector<uint8_t> _quoteExtension;
-    std::vector<uint8_t> _oe_quote;
-
-    oe_report_t _parsedReport{ 0 };
-
     // Inherited via IVerifyMetadataCertificates
     virtual HRESULT __stdcall VerifyQuoteExtensionInCertificate(LPCSTR base64encodedCertificate, bool* extensionFound) override;
     virtual HRESULT __stdcall VerifyQuoteInExtension(bool* quoteIsValid) override;
     virtual HRESULT __stdcall VerifyCertificateKeyMatchesHash(bool* certificateKeyIsValid) override;
-    virtual uint32_t __stdcall SecurityVersion() override
+    virtual HRESULT __stdcall SecurityVersion(uint32_t *version) override
     {
-        return _parsedReport.identity.security_version;
+        if (!version)
+        {
+            return E_POINTER;
+        }
+
+        *version = _parsedReport.identity.security_version;
+        return S_OK;
     }
 
-    virtual std::vector<uint8_t> __stdcall UniqueId() override
+    STDMETHODIMP UniqueId(uint32_t* uniqueIdSize, uint8_t** uniqueId) override
     {
-        return std::vector<uint8_t>(_parsedReport.identity.unique_id, _parsedReport.identity.unique_id + OE_UNIQUE_ID_SIZE);
+        if (uniqueIdSize == nullptr || uniqueId == nullptr)
+        {
+            return E_POINTER;
+        }
+        *uniqueIdSize = sizeof(_parsedReport.identity.unique_id);
+        *uniqueId = static_cast<uint8_t*>(CoTaskMemAlloc(*uniqueIdSize));
+        if (*uniqueId == nullptr)
+        {
+            return E_OUTOFMEMORY;
+        }
+        CopyMemory(*uniqueId, _parsedReport.identity.unique_id, *uniqueIdSize);
+        return S_OK;
     }
 
-    virtual std::vector<uint8_t> __stdcall SignerId() override
+    STDMETHODIMP SignerId(uint32_t* signerIdSize, uint8_t** signerId) override
     {
-        return std::vector<uint8_t>(_parsedReport.identity.signer_id, _parsedReport.identity.signer_id + OE_SIGNER_ID_SIZE);
+        if (signerIdSize == nullptr || signerId == nullptr)
+        {
+            return E_POINTER;
+        }
+        *signerIdSize = sizeof(_parsedReport.identity.signer_id);
+        *signerId = static_cast<uint8_t*>(CoTaskMemAlloc(*signerIdSize));
+        if (*signerId == nullptr)
+        {
+            return E_OUTOFMEMORY;
+        }
+        CopyMemory(*signerId, _parsedReport.identity.signer_id, *signerIdSize);
+        return S_OK;
     }
 
-    virtual std::vector<uint8_t> __stdcall ProductId() override
+    STDMETHODIMP ProductId(uint32_t *productIdSize, uint8_t** productId) override
     {
-        return std::vector<uint8_t>(_parsedReport.identity.product_id, _parsedReport.identity.product_id + OE_PRODUCT_ID_SIZE);
+        if (productIdSize == nullptr || productId == nullptr)
+        {
+            return E_POINTER;
+        }
+        *productIdSize = sizeof(_parsedReport.identity.product_id);
+        *productId = static_cast<uint8_t*>(CoTaskMemAlloc(*productIdSize));
+        if (*productId == nullptr)
+        {
+            return E_OUTOFMEMORY;
+        }
+        CopyMemory(*productId, _parsedReport.identity.product_id, *productIdSize);
+        return S_OK;
     }
-    virtual std::vector<uint8_t> __stdcall ReportData() override
+
+    STDMETHODIMP ReportData(uint32_t* reportDataSize, uint8_t** reportData) override
     {
-        return std::vector<uint8_t>(_parsedReport.report_data, _parsedReport.report_data + _parsedReport.report_data_size);
+        if (reportDataSize == nullptr || reportData == nullptr)
+        {
+            return E_POINTER;
+        }
+        *reportDataSize = static_cast<uint32_t>(_parsedReport.report_data_size);
+        *reportData = static_cast<uint8_t*>(CoTaskMemAlloc(*reportDataSize));
+        if (*reportData == nullptr)
+        {
+            return E_OUTOFMEMORY;
+        }
+        CopyMemory(*reportData, _parsedReport.report_data, *reportDataSize);
+        return S_OK;
     }
+
+    STDMETHODIMP PublicKeyHash(uint32_t* publicKeyHashSize, uint8_t** publicKeyHash) override
+    {
+        if (publicKeyHashSize == nullptr || publicKeyHash == nullptr)
+        {
+            return E_POINTER;
+        }
+
+        RETURN_IF_FAILED(EnsurePublicKeyHash());
+        *publicKeyHashSize = static_cast<uint32_t>(_publicKeyHash.size());
+        *publicKeyHash = static_cast<uint8_t*>(CoTaskMemAlloc(*publicKeyHashSize));
+        if (*publicKeyHash == nullptr)
+        {
+            return E_OUTOFMEMORY;
+        }
+        CopyMemory(*publicKeyHash, _publicKeyHash.data(), *publicKeyHashSize);
+        return S_OK;
+    }
+
+    HRESULT EnsurePublicKeyHash()
+    {
+        if (_publicKeyHash.empty())
+        {
+            std::string serializedPublicKey = _workingCert->ExportPublicKeyAsPEM();
+
+            // The MAA generates the hash over the PEM encoded public key, including the trailing null terminator.
+            auto ehd(std::vector<uint8_t>(serializedPublicKey.begin(), serializedPublicKey.end()));
+            ehd.push_back(0);
+
+            auto hasher = Sha256Hash::Create();
+            _publicKeyHash = hasher->HashAndFinish(ehd);
+        }
+        return S_OK;
+    }
+
+    unsigned long _refCount{ 1 };
+    std::unique_ptr<X509Cert> _workingCert;
+    std::vector<uint8_t> _quoteExtension;
+    std::vector<uint8_t> _oe_quote;
+    std::vector<uint8_t> _publicKeyHash;
+
+    oe_report_t _parsedReport{ 0 };
 
 
 };
@@ -95,7 +185,6 @@ private:
 // This is the constructor of a class that has been exported.
 CVerifyMetadataCertificates::CVerifyMetadataCertificates()
 {
-    return;
 }
 
 HRESULT __stdcall CVerifyMetadataCertificates::VerifyQuoteExtensionInCertificate(LPCSTR base64encodedCertificate, bool* extensionFound)
@@ -176,21 +265,14 @@ HRESULT __stdcall CVerifyMetadataCertificates::VerifyCertificateKeyMatchesHash(b
 {
     *certificateKeyIsValid = false;
 
-    std::string enclaveHeldData = _workingCert->ExportPublicKeyAsPEM();
+    RETURN_IF_FAILED(EnsurePublicKeyHash());
 
-    // The MAA generates the hash over the PEM encoded public key, including the trailing null terminator.
-    auto ehd(std::vector<uint8_t>(enclaveHeldData.begin(), enclaveHeldData.end()));
-    ehd.push_back(0);
-
-    auto hasher = Sha256Hash::Create();
-    auto hashedEnclaveData = hasher->HashAndFinish(ehd);
-
-    if (hashedEnclaveData.size() > _parsedReport.report_data_size)
+    if (_publicKeyHash.size() > _parsedReport.report_data_size)
     {
         return E_FAIL;
     }
 
-    if (memcmp(hashedEnclaveData.data(), _parsedReport.report_data, hashedEnclaveData.size()) != 0)
+    if (memcmp(_publicKeyHash.data(), _parsedReport.report_data, _publicKeyHash.size()) != 0)
     {
         return E_FAIL;
     }
@@ -199,9 +281,12 @@ HRESULT __stdcall CVerifyMetadataCertificates::VerifyCertificateKeyMatchesHash(b
     return S_OK;
 }
 
-int GetMetadataCertificateVerifier(IVerifyMetadataCertificates** certificateVerifier)
+extern "C"
 {
-    wil::com_ptr<IVerifyMetadataCertificates> verifier = new CVerifyMetadataCertificates();
-    *certificateVerifier = verifier.detach();
-    return S_OK;
+    HRESULT GetMetadataCertificateVerifier(IVerifyMetadataCertificates** certificateVerifier)
+    {
+        wil::com_ptr<IVerifyMetadataCertificates> verifier = new CVerifyMetadataCertificates();
+        *certificateVerifier = verifier.detach();
+        return S_OK;
+    }
 }

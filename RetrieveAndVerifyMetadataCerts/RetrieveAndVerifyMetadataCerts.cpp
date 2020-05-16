@@ -91,6 +91,10 @@ std::string FormatBuffer(const char *prefix, const uint8_t (&bufferToPrint)[size
     return FormatBuffer(prefix, std::vector<uint8_t>(bufferToPrint, bufferToPrint + size));
 }
 
+std::string FormatBuffer(const char* prefix, uint32_t size, uint8_t const * const bufferToPrint)
+{
+    return FormatBuffer(prefix, std::vector<uint8_t>(bufferToPrint, bufferToPrint + size));
+}
 
 
 int main()
@@ -155,12 +159,46 @@ int main()
 
 
     std::cout << "Parsed SGX Report: " << std::endl;
-    std::cout << " Security Version: " << certificateVerifier->SecurityVersion() << std::endl;
-    std::cout << FormatBuffer("       Product ID : ", certificateVerifier->ProductId()) << std::endl;
-    std::cout << FormatBuffer("         Signer ID: ", certificateVerifier->SignerId()) << std::endl;
-    std::cout << FormatBuffer("        Enclave ID: ", certificateVerifier->UniqueId()) << std::endl;
+    uint32_t version;
+    THROW_IF_FAILED(certificateVerifier->SecurityVersion(&version));
+    std::cout << "  Security Version: " << version << std::endl;
 
-    std::cout << FormatBuffer("       report data: ", certificateVerifier->ReportData());
+    {
+        uint32_t productIdSize;
+        wil::unique_cotaskmem_array_ptr<uint8_t> productId;
+        THROW_IF_FAILED(certificateVerifier->ProductId(&productIdSize, productId.addressof()));
+
+        std::cout << FormatBuffer("        Product ID: ", productIdSize, productId.get()) << std::endl;
+    }
+    {
+        uint32_t signerIdSize;
+        wil::unique_cotaskmem_array_ptr<uint8_t> signerId;
+        THROW_IF_FAILED(certificateVerifier->SignerId(&signerIdSize, signerId.addressof()));
+
+        std::cout << FormatBuffer("         Signer ID: ", signerIdSize, signerId.get()) << std::endl;
+    }
+    {
+        uint32_t uniqueIdSize;
+        wil::unique_cotaskmem_array_ptr<uint8_t> uniqueId;
+        THROW_IF_FAILED(certificateVerifier->UniqueId(&uniqueIdSize, uniqueId.addressof()));
+        std::cout << FormatBuffer("        Enclave ID: ", uniqueIdSize, uniqueId.get()) << std::endl;
+    }
+
+    {
+        uint32_t reportDataSize;
+        wil::unique_cotaskmem_array_ptr<uint8_t> reportData;
+        THROW_IF_FAILED(certificateVerifier->ReportData(&reportDataSize, reportData.addressof()));
+        std::cout << FormatBuffer("       report data: ", reportDataSize, reportData.get()) << std::endl;
+
+    }
+
+    {
+        uint32_t publicKeyHashSize;
+        wil::unique_cotaskmem_array_ptr<uint8_t> publicKeyHash;
+        THROW_IF_FAILED(certificateVerifier->PublicKeyHash(&publicKeyHashSize, publicKeyHash.addressof()));
+        std::cout << FormatBuffer("   public key hash: ", publicKeyHashSize, publicKeyHash.get()) << std::endl;
+    }
+
 
     bool keyMatchesHash = false;
     if (FAILED(certificateVerifier->VerifyCertificateKeyMatchesHash(&keyMatchesHash)) || !keyMatchesHash)
